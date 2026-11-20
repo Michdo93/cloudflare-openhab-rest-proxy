@@ -6,6 +6,7 @@
   // lets the Worker notice at once when a browser closes the event stream
   "compatibility_flags": ["enable_request_signal"],
   "workers_dev": true,
+  "preview_urls": false,
   "vars": {
     // myopenHAB, or your own openHAB behind HTTPS
     "OPENHAB_URL": "https://myopenhab.org",
