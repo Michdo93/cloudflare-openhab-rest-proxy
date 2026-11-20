@@ -21,6 +21,7 @@ The matching browser library is [js-openhab-proxy-client](https://github.com/Mic
 | GET | `/api/v1/items/{name}` | one item; group members are filtered |
 | GET | `/api/v1/items/{name}/state` | state as text |
 | POST | `/api/v1/items/{name}/command` | body: command as text; answer `{"message":"OK"}` |
+| GET | `/api/v1/items/{name}/history?start=…&end=…` | values from the persistence: `{"name","datapoints","data":[{"time","state"}]}`; ISO times, default the last 24 h, at most `MAX_HISTORY_DAYS` |
 | GET | `/api/v1/events[?items=A,B]` | Server-Sent Events, only `ItemStateChangedEvent` and `GroupItemStateChangedEvent` of allowed items |
 | GET | `/health` | `{"status":"ok"}`, does not contact openHAB |
 
@@ -85,6 +86,8 @@ Edit `wrangler.jsonc`:
 | `ACCESS_MODE` | `public-demo` or `access` (see below) |
 | `CORS_ALLOWED_ORIGINS` | `https://YOUR-NAME.github.io,http://localhost:5173` |
 | `ALLOWED_ITEMS_JSON` | the allowlist as one JSON string (max. 5 KB) |
+| `PERSISTENCE_SERVICE` | service for `/history`, e.g. `rrd4j`; empty = the default of openHAB |
+| `MAX_HISTORY_DAYS` | longest period for `/history` (default 7, `0` switches it off) |
 
 Secrets never go into `wrangler.jsonc` or Git:
 
@@ -119,7 +122,7 @@ CORS only stops other web pages in a browser. It does not stop curl or scripts �
 Keep your own configuration in a separate (private) repository and install this one as a dependency:
 
 ```bash
-npm install github:Michdo93/cloudflare-openhab-rest-proxy#v0.2.0
+npm install github:Michdo93/cloudflare-openhab-rest-proxy#v0.3.0
 ```
 
 ```ts

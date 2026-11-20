@@ -52,3 +52,24 @@ describe("proxy", () => {
       groupNames: [], members: [{ name: "Sensor" }] });
   });
 });
+
+describe("history", () => {
+  it("asks the persistence for a limited period and passes only time and state",
+    async () => {
+      const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        Response.json({ name: "Sensor", data: [{ time: 1, state: "20.5", x: 1 }] }));
+      const answer = await call("/api/v1/items/Sensor/history"
+        + "?start=2026-11-20T00:00:00Z&end=2026-11-21T00:00:00Z");
+      expect(await answer.json())
+        .toEqual({ name: "Sensor", datapoints: 1, data: [{ time: 1, state: "20.5" }] });
+      expect(String(fetch.mock.calls[0][0])).toContain("/rest/persistence/items/Sensor?");
+    });
+
+  it("refuses long periods and unknown items without asking openHAB", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch");
+    expect((await call("/api/v1/items/Sensor/history"
+      + "?start=2026-01-01T00:00:00Z&end=2026-11-21T00:00:00Z")).status).toBe(400);
+    expect((await call("/api/v1/items/Herd/history")).status).toBe(404);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});

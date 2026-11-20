@@ -21,7 +21,9 @@ export function optionsFromEnv(env: Env): ProxyOptions {
     corsOrigins: (env.CORS_ALLOWED_ORIGINS ?? "").split(",")
       .map((origin) => origin.trim()).filter(Boolean),
     maxCommandLength: Number(env.MAX_COMMAND_LENGTH ?? 64),
-    upstreamTimeoutMs: Number(env.UPSTREAM_TIMEOUT_MS ?? 15000)
+    upstreamTimeoutMs: Number(env.UPSTREAM_TIMEOUT_MS ?? 15000),
+    persistenceService: env.PERSISTENCE_SERVICE || null,
+    maxHistoryDays: Number(env.MAX_HISTORY_DAYS ?? 7)
   };
 }
 
@@ -29,7 +31,8 @@ let cached: { raw: string; options: ProxyOptions } | undefined;
 
 export default createProxy((env) => {
   const raw = JSON.stringify([env.OPENHAB_URL, env.ACCESS_MODE,
-    env.CORS_ALLOWED_ORIGINS, env.ALLOWED_ITEMS_JSON]);
+    env.CORS_ALLOWED_ORIGINS, env.ALLOWED_ITEMS_JSON, env.PERSISTENCE_SERVICE,
+    env.MAX_HISTORY_DAYS]);
   if (cached?.raw !== raw) cached = { raw, options: optionsFromEnv(env) };
   return cached.options;
 });

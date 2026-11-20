@@ -42,6 +42,10 @@ export interface ProxyOptions {
   heartbeatMs?: number;
   /** Requests per minute and client in the fallback limiter. */
   commandsPerMinute?: number;
+  /** Persistence service for /history, e.g. "rrd4j"; null = openHAB default. */
+  persistenceService?: string | null;
+  /** Longest period /history returns, in days (default 7, 0 = off). */
+  maxHistoryDays?: number;
 }
 
 /** Bindings and secrets of the Worker. */
@@ -55,6 +59,8 @@ export interface Env {
   ALLOWED_ITEMS_JSON?: string;
   MAX_COMMAND_LENGTH?: string;
   UPSTREAM_TIMEOUT_MS?: string;
+  PERSISTENCE_SERVICE?: string;
+  MAX_HISTORY_DAYS?: string;
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
   COMMAND_LIMITER?: RateLimiter;

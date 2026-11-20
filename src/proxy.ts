@@ -135,7 +135,7 @@ async function route(
     return response;
   }
 
-  const match = /^\/api\/v1\/items\/([^/]+)(?:\/(state|command))?$/
+  const match = /^\/api\/v1\/items\/([^/]+)(?:\/(state|command|history))?$/
     .exec(url.pathname);
   if (!match) return json({ error: "not found" }, 404);
   const name = safeName(match[1]);
@@ -168,6 +168,7 @@ async function route(
 
   if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
   if (!rule.read) return NOT_FOUND();
+  if (match[2] === "history") return history(env, config, item, url, timeout);
   if (match[2] === "state") {
     const answer = await upstream(env,
       restUrl(env.OPENHAB_URL!, `items/${item}/state`),
@@ -186,6 +187,38 @@ async function route(
   if (answer.status === 404) return NOT_FOUND();
   if (!answer.ok) return json({ error: "openHAB error" }, 502);
   return json(cleanItem(await answer.json() as Item, allowlist));
+}
+
+/** Verlauf aus der Persistence – nur lesbare Items, begrenzter Zeitraum. */
+async function history(
+  env: Env, config: ProxyOptions, item: string, url: URL, timeout: number
+): Promise<Response> {
+  const days = config.maxHistoryDays ?? 7;
+  if (days <= 0) return json({ error: "history not available" }, 404);
+  const end = url.searchParams.has("end")
+    ? new Date(url.searchParams.get("end")!) : new Date();
+  const start = url.searchParams.has("start")
+    ? new Date(url.searchParams.get("start")!)
+    : new Date(end.getTime() - 24 * 3600 * 1000);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+    return json({ error: "invalid period" }, 400);
+  }
+  if (end.getTime() - start.getTime() > days * 24 * 3600 * 1000) {
+    return json({ error: `period longer than ${days} days` }, 400);
+  }
+  const query: Record<string, string> = {
+    starttime: start.toISOString(), endtime: end.toISOString()
+  };
+  if (config.persistenceService) query.serviceId = config.persistenceService;
+  const answer = await upstream(env,
+    restUrl(env.OPENHAB_URL!, `persistence/items/${item}`, query), {}, timeout);
+  if (answer.status === 404) return json({ error: "No history for this item." }, 404);
+  if (!answer.ok) return json({ error: "openHAB error" }, 502);
+  const data = await answer.json() as { name?: string; data?: unknown[] };
+  const points = (data.data ?? []).filter((p): p is { time: number; state: string } =>
+    !!p && typeof p === "object" && "time" in p && "state" in p)
+    .map(({ time, state }) => ({ time, state }));
+  return json({ name: data.name, datapoints: points.length, data: points });
 }
 
 function safeName(raw: string): string | null {

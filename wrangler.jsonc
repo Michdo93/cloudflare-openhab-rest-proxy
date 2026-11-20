@@ -16,6 +16,9 @@
     "CORS_ALLOWED_ORIGINS": "http://localhost:5173",
     // which items may be read and commanded – see README
     "ALLOWED_ITEMS_JSON": "{\"Demo_Licht\":{\"read\":true,\"commands\":\"type\",\"type\":\"Switch\"},\"Demo_Temperatur\":{\"read\":true}}",
+    // persistence service for /history (empty = openHAB default), longest period
+    "PERSISTENCE_SERVICE": "rrd4j",
+    "MAX_HISTORY_DAYS": "7",
     "MAX_COMMAND_LENGTH": "64",
     "UPSTREAM_TIMEOUT_MS": "15000"
   },

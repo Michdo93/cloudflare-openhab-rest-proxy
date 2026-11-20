@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-openhab-rest-proxy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A narrow Cloudflare Worker proxy for the openHAB REST API: allowlisted items, typed commands and filtered events.",
   "type": "module",
   "main": "src/index.ts",
