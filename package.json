@@ -1,9 +1,13 @@
 {
   "name": "cloudflare-openhab-rest-proxy",
-  "version": "0.1.1",
-  "private": true,
-  "description": "A narrowly scoped Cloudflare Worker proxy for openHAB REST and SSE APIs.",
+  "version": "0.2.0",
+  "description": "A narrow Cloudflare Worker proxy for the openHAB REST API: allowlisted items, typed commands and filtered events.",
   "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src", "README.md", "LICENSE"],
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -12,9 +16,10 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20261118.0",
+    "@cloudflare/workers-types": "^5.20261101.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",
-    "wrangler": "^4.50.0"
-  }
+    "wrangler": "^4.166.0"
+  },
+  "license": "MIT"
 }

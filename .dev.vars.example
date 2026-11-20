@@ -1,8 +1,14 @@
-# Copy to .dev.vars and replace the placeholders. Never commit .dev.vars.
-MYOPENHAB_EMAIL=your-myopenhab-email@example.com
-MYOPENHAB_PASSWORD=replace-with-your-myopenhab-password
+# Copy to .dev.vars for "wrangler dev". Never commit .dev.vars.
+# For the cloud: secrets via "npx wrangler secret put <NAME>".
 
-# Only required when ACCESS_MODE=access. Use your Cloudflare Access team domain
-# without https://, e.g. example.cloudflareaccess.com
+# myopenHAB: e-mail and password of the account (HTTP Basic)
+OPENHAB_USER=you@example.com
+OPENHAB_PASSWORD=change-me
+
+# Optional: API token of openHAB. With OPENHAB_USER it is sent as
+# X-OPENHAB-TOKEN (myopenHAB), without it as Bearer token (direct openHAB).
+OPENHAB_TOKEN=
+
+# Only for ACCESS_MODE=access
 ACCESS_TEAM_DOMAIN=example.cloudflareaccess.com
-ACCESS_AUD=replace-with-your-access-application-audience
+ACCESS_AUD=replace-with-the-application-audience

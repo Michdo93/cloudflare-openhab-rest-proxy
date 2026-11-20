@@ -1,239 +1,149 @@
 # cloudflare-openhab-rest-proxy
 
-A deliberately narrow proxy between browser applications and an openHAB REST API. It is designed for Cloudflare Workers and does **not** expose a generic REST tunnel.
+A small Cloudflare Worker that lets a public web page – for example a dashboard on GitHub Pages – use **parts** of an openHAB REST API without ever seeing the openHAB credentials.
 
-> Status: initial implementation / review required before connecting real devices. The myopenHAB account-authentication path must be tested with the target account. In particular, verify whether the Cloud Connector supports `/rest/events` (SSE) for your installation.
-
-## Design goals
-
-- Keep myopenHAB account credentials on the Worker, never in browser code.
-- Connect to the fixed myopenHAB endpoint `https://myopenhab.org` using the myopenHAB account email address and password.
-- Do not use an openHAB API token for the myopenHAB Cloud Connector route.
-- Expose only a small, versioned API:
-  - `GET /api/v1/items`
-  - `GET /api/v1/items/:name`
-  - `GET /api/v1/items/:name/state`
-  - `POST /api/v1/items/:name/command`
-  - `GET /api/v1/events` (SSE)
-- Enforce an explicit item and command allowlist.
-- Allow only `ItemStateChangedEvent` events for readable allowlisted items.
-- Never forward arbitrary paths, query parameters, headers, or HTTP methods to openHAB.
-- Keep CORS separate from authentication. CORS is a browser policy, not an access-control boundary.
-
-## Architecture
+It is not a tunnel. The Worker offers five fixed endpoints, checks every item name against an allowlist, checks every command against the item type, and passes on only state changes of allowed items.
 
 ```text
-Browser / JS client
-        |
-        | restricted /api/v1/* (unchanged client contract)
-        v
-Cloudflare Worker
-  - allowlist
-  - command validation
-  - optional Cloudflare Access JWT validation
-  - SSE event filtering
-        |
-        | HTTPS + HTTP Basic (myopenHAB email:password)
-        v
-https://myopenhab.org/rest
-        |
-        v
-myopenHAB Cloud Connector / openHAB instance
+Browser (GitHub Pages)  --/api/v1/*-->  Cloudflare Worker  --/rest/*-->  myopenHAB  -->  openHAB
+   no credentials                       allowlist, typed       HTTP Basic
+                                        commands, filtered     (+ optional API token)
+                                        events, rate limit
 ```
 
-The Worker uses `https://myopenhab.org` as its upstream origin and `/rest` as the API prefix. It sends HTTP Basic authentication with the myopenHAB account email address as the username and the myopenHAB account password as the password. The credentials are held only in Worker secrets (or local `.dev.vars` during development).
-
-The openHAB API token is **not used** for this myopenHAB cloud route. It remains useful for direct REST access to an openHAB instance, but it is not a substitute for the myopenHAB account credentials here.
-
-Do not assume that every openHAB endpoint, especially `/rest/events`, is available through the Cloud Connector. Test REST and SSE independently.
-
-## Requirements
-
-- A Cloudflare account with Workers enabled.
-- Node.js 20+ and npm.
-- A myopenHAB account linked to the target openHAB instance.
-- The myopenHAB account email address and password.
-- A working myopenHAB Cloud Connector connection.
-
-Cloudflare's TypeScript Worker runtime and Wrangler are documented at:
-
-- https://developers.cloudflare.com/workers/languages/typescript/
-- https://developers.cloudflare.com/workers/wrangler/
-- https://developers.cloudflare.com/workers/configuration/secrets/
-
-## Quick start
-
-```bash
-npm install
-cp .dev.vars.example .dev.vars
-```
-
-Edit `.dev.vars` and set:
-
-```dotenv
-MYOPENHAB_EMAIL=your-myopenhab-email@example.com
-MYOPENHAB_PASSWORD=your-myopenhab-password
-```
-
-Never commit `.dev.vars`. The upstream URL is configured in `wrangler.jsonc` as `https://myopenhab.org`; the REST prefix is `/rest`.
-
-Edit `wrangler.jsonc` as needed:
-
-- `ACCESS_MODE`: `public-demo` or `access`.
-- `CORS_ALLOWED_ORIGINS`: comma-separated exact browser origins.
-- `ALLOWED_ITEMS_JSON`: item names, read permission, and exact allowed commands.
-- `MYOPENHAB_BASE_URL`: keep this set to `https://myopenhab.org` for the myopenHAB cloud route.
-- `OPENHAB_API_PREFIX`: normally `/rest`.
-
-Run locally:
-
-```bash
-npm run types
-npm run typecheck
-npm test
-npm run dev
-```
-
-## Deployment
-
-```bash
-npx wrangler login
-npx wrangler secret put MYOPENHAB_EMAIL
-npx wrangler secret put MYOPENHAB_PASSWORD
-npm run deploy
-```
-
-Enter the myopenHAB email address and password when Wrangler prompts for each secret. These are encrypted Worker secrets. Do not put them in `vars`, `wrangler.jsonc`, GitHub Actions logs, or source control.
-
-If using Cloudflare Access, also configure the Access secrets described below.
-
-## Allowlist format
-
-Example:
-
-```json
-{
-  "Demo_Light": {
-    "read": true,
-    "commands": ["ON", "OFF"]
-  },
-  "Demo_Temperature": {
-    "read": true,
-    "commands": []
-  },
-  "Internal_Item": {
-    "read": false,
-    "commands": ["RESET"]
-  }
-}
-```
-
-Only `read: true` items are returned by the list endpoint or exposed through item/state reads and SSE. Commands are exact string matches. A command permission does not imply read permission.
-
-Use item names that actually exist in your openHAB instance. Keep this allowlist minimal. A public demo should contain only virtual/demo items that cannot operate real devices.
-
-## Access modes
-
-### `public-demo`
-
-No user authentication is required to call the Worker. This mode is appropriate only for a public demonstration backed by virtual items and harmless commands. Anyone who discovers the Worker URL can call its allowlisted operations. The myopenHAB credentials remain server-side, but this mode does not authenticate callers of the Worker.
-
-### `access`
-
-The Worker validates the `Cf-Access-Jwt-Assertion` JWT against the configured Cloudflare Access team domain and application audience. Configure a Cloudflare Access self-hosted application in front of the Worker and protect the Worker hostname/path. Set these Worker secrets:
-
-```bash
-npx wrangler secret put ACCESS_TEAM_DOMAIN
-npx wrangler secret put ACCESS_AUD
-```
-
-Set `ACCESS_MODE` to `access`. Configure the Access application so requests to the Worker are authenticated and the application audience matches `ACCESS_AUD`.
-
-For a real installation, protect the Worker with Cloudflare Access and test JWT validation end-to-end. Do not treat CORS, an obscure URL, or a frontend-only password as authentication.
+The matching browser library is [js-openhab-proxy-client](https://github.com/Michdo93/js-openhab-proxy-client). It has the same classes and methods as [js-openhab-rest-client](https://github.com/Michdo93/js-openhab-rest-client), so a dashboard can switch between direct access (at home) and the proxy (public demo) by loading a different script.
 
 ## API
 
-### `GET /health`
+| Method | Path | Answer |
+|---|---|---|
+| GET | `/api/v1/items` | allowed items (JSON, reduced fields) |
+| GET | `/api/v1/items/{name}` | one item; group members are filtered |
+| GET | `/api/v1/items/{name}/state` | state as text |
+| POST | `/api/v1/items/{name}/command` | body: command as text; answer `{"message":"OK"}` |
+| GET | `/api/v1/events[?items=A,B]` | Server-Sent Events, only `ItemStateChangedEvent` and `GroupItemStateChangedEvent` of allowed items |
+| GET | `/health` | `{"status":"ok"}`, does not contact openHAB |
 
-Returns a small health response. It does not test upstream connectivity.
+Errors are JSON objects with an `error` text, e.g. `{"error":"Item not found."}` (404) for items that do not exist **or** are not allowed – the proxy does not reveal which. A rejected command answers 403 with a `reason`, too many commands 429.
 
-### `GET /api/v1/items`
+Events are passed on in the format of openHAB (`event: message`, `data: {"topic","payload","type"}`), so the same parser works for both. The Worker answers the event request immediately and connects to openHAB in the background: myopenHAB only sends the headers of an event stream together with the first event ([openhab-cloud #258](https://github.com/openhab/openhab-cloud/issues/258)). A comment line every 15 s keeps the connection open and lets the Worker notice a closed browser.
 
-Returns only allowlisted items with `read: true`. The Worker currently fetches the upstream item list and filters it. If you have a very large openHAB instance, consider a future implementation that fetches each permitted item individually or caches a minimal snapshot.
+## Allowlist
 
-### `GET /api/v1/items/:name`
+`ALLOWED_ITEMS_JSON` (or the `allowlist` option, see below) maps item names to rules:
 
-Returns the openHAB item representation, only if the item is allowlisted for reading.
-
-### `GET /api/v1/items/:name/state`
-
-Returns the item's state as plain text.
-
-### `POST /api/v1/items/:name/command`
-
-Sends a command as a plain-text request body. Example:
-
-```bash
-curl -X POST \
-  -H 'Content-Type: text/plain' \
-  --data 'ON' \
-  https://YOUR-WORKER.workers.dev/api/v1/items/Demo_Light/command
+```json
+{
+  "Wohnzimmer_Deckenlampe_Schalter": { "read": true, "commands": "type", "type": "Switch" },
+  "Wohnzimmer_Thermostat_Soll": { "read": true, "commands": "type",
+                                  "type": "Number:Temperature", "min": 16, "max": 26 },
+  "Diele_Alarmanlage_Modus": { "read": true, "commands": ["aus", "intern", "extern"] },
+  "Garten_Temperatur": { "read": true }
+}
 ```
 
-The command must exactly match one of the item's `commands` entries. The Worker forwards it as an HTTP `POST` to `/rest/items/:name`, which is the openHAB REST command operation. `postUpdate` is intentionally not exposed.
+| Field | Meaning |
+|---|---|
+| `read` | item may be listed, read and appears in the event stream |
+| `commands` | `"type"`: every command that is valid for `type`; a list: exactly these; missing: none |
+| `type` | openHAB item type, needed for `"type"` |
+| `min`, `max` | range for Number, Dimmer and Rollershutter commands |
 
-### `GET /api/v1/events`
+What `"type"` allows:
 
-Returns an SSE stream. Only events named `ItemStateChangedEvent` whose envelope topic matches `openhab/items/<allowlisted-item>/state` are passed through. The stream is forwarded incrementally and upstream reading is cancelled when the downstream stream is cancelled.
+| Type | Commands |
+|---|---|
+| Switch | `ON`, `OFF` |
+| Dimmer | `ON`, `OFF`, `INCREASE`, `DECREASE`, 0–100 |
+| Color | as Dimmer, plus `H,S,B` (0–360, 0–100, 0–100) |
+| Rollershutter | `UP`, `DOWN`, `STOP`, `MOVE`, 0–100 |
+| Player | `PLAY`, `PAUSE`, `NEXT`, `PREVIOUS`, `REWIND`, `FASTFORWARD` |
+| Number | a number; `Number:<Dimension>` also with a unit, e.g. `21.5 °C` |
+| String | any text up to `MAX_COMMAND_LENGTH` without control characters |
+| DateTime | ISO 8601 date and time |
+| Location | `latitude,longitude[,altitude]` |
+| Contact, Call, Image, Group | none – sensors are read-only, groups would switch many items at once |
 
-The implementation subscribes upstream using exact topic names. Verify that the openHAB version and Cloud Connector support this event endpoint and topic syntax. The Worker does not buffer the complete stream.
+Prefer a fixed list for String items with a few modes. Sensors get no `commands` at all.
 
-## CORS
+## Setup
 
-Set `CORS_ALLOWED_ORIGINS` to exact origins, e.g.:
-
-```text
-https://your-dashboard.github.io,http://localhost:5173
-```
-
-Do not use `*` for a real installation. CORS only constrains browser JavaScript; it does not stop curl, scripts, or other servers from calling the API.
-
-## Security checklist before production
-
-- [ ] Use a dedicated myopenHAB account for the Worker if practical; understand that its cloud credentials grant the access associated with that account.
-- [ ] Use `ACCESS_MODE=access` for real installations.
-- [ ] Put the Worker behind a Cloudflare Access application.
-- [ ] Keep `MYOPENHAB_EMAIL`, `MYOPENHAB_PASSWORD`, `ACCESS_TEAM_DOMAIN`, and `ACCESS_AUD` as Worker secrets.
-- [ ] Keep `.dev.vars` out of Git.
-- [ ] Never expose myopenHAB credentials to the browser or return them in API responses.
-- [ ] Use exact CORS origins (understand that CORS is not authentication).
-- [ ] Allowlist only the virtual or real items that must be exposed.
-- [ ] Allowlist exact commands per item.
-- [ ] Test every command against a noncritical item first.
-- [ ] Verify myopenHAB upstream REST and SSE behavior, authentication, reconnects, and idle timeouts.
-- [ ] Add Cloudflare rate limiting / abuse protection before publishing a public endpoint.
-- [ ] Review logs and avoid logging credentials, event payloads, or personal data.
-
-## Known limitations / next hardening steps
-
-This is a starter implementation, not a certified security gateway.
-
-1. The in-memory Worker runtime does not provide a globally consistent per-user rate limiter. Add Cloudflare rate limiting or a Durable Object if abuse resistance is required.
-2. SSE filtering assumes the standard openHAB event envelope contains a `topic` field like `openhab/items/ItemName/state`. Confirm this against your deployed openHAB version and the myopenHAB route.
-3. The Worker fetches `/rest/items` before filtering the list. The response is not exposed wholesale, but upstream bandwidth and parsing scale with the full item registry.
-4. Cloudflare Access JWT key retrieval is performed during authorization. Add a bounded JWKS cache if request volume warrants it.
-5. The myopenHAB account's permissions apply to the upstream connection; the Worker allowlist is the browser-facing restriction and does not replace account-level security.
-6. Add automated integration tests against a disposable openHAB instance and a real myopenHAB Cloud Connector account before production.
-
-## Development notes
+Requirements: a free Cloudflare account, Node.js 20 or newer, an openHAB 5 that is reachable over HTTPS – usually through the [openHAB Cloud Connector](https://www.openhab.org/addons/integrations/openhabcloud/) and myopenHAB.
 
 ```bash
-npm run typecheck
+git clone https://github.com/Michdo93/cloudflare-openhab-rest-proxy
+cd cloudflare-openhab-rest-proxy
+npm install
 npm test
 ```
 
-The test suite covers allowlist parsing and verifies that upstream requests target `https://myopenhab.org/rest` using HTTP Basic authentication with the configured email address and password. It does not perform a live request to myopenHAB.
+Edit `wrangler.jsonc`:
+
+| Variable | Example |
+|---|---|
+| `OPENHAB_URL` | `https://myopenhab.org` or your own `https://openhab.example.org` |
+| `ACCESS_MODE` | `public-demo` or `access` (see below) |
+| `CORS_ALLOWED_ORIGINS` | `https://YOUR-NAME.github.io,http://localhost:5173` |
+| `ALLOWED_ITEMS_JSON` | the allowlist as one JSON string (max. 5 KB) |
+
+Secrets never go into `wrangler.jsonc` or Git:
+
+```bash
+npx wrangler login
+npx wrangler secret put OPENHAB_USER        # myopenHAB: your e-mail address
+npx wrangler secret put OPENHAB_PASSWORD    # myopenHAB: your password
+npx wrangler secret put OPENHAB_TOKEN       # optional, see below
+npm run deploy
+```
+
+Authentication towards openHAB:
+
+| Secrets | Sent as | Use |
+|---|---|---|
+| `OPENHAB_USER` + `OPENHAB_PASSWORD` | `Authorization: Basic …` | myopenHAB |
+| + `OPENHAB_TOKEN` | additionally `X-OPENHAB-TOKEN: …` | myopenHAB, if openHAB itself requires a token |
+| only `OPENHAB_TOKEN` | `Authorization: Bearer …` | an openHAB that is directly reachable over HTTPS |
+
+For local development copy `.dev.vars.example` to `.dev.vars` and run `npm run dev`.
+
+## Access modes
+
+**`public-demo`** – anyone who knows the Worker URL may use the allowlist. Only for virtual items that control nothing real. Commands are rate-limited per client (`COMMAND_LIMITER` binding in `wrangler.jsonc`, 20 per minute; without the binding a simple per-instance limiter with 30 per minute is used).
+
+**`access`** (default) – every request needs a valid [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-apps/) token (`Cf-Access-Jwt-Assertion`). Put an Access application in front of the Worker and set `ACCESS_TEAM_DOMAIN` (e.g. `example.cloudflareaccess.com`) and `ACCESS_AUD` as secrets. Use this mode for real devices.
+
+CORS only stops other web pages in a browser. It does not stop curl or scripts – the allowlist and the access mode do.
+
+## Using the proxy as a library
+
+Keep your own configuration in a separate (private) repository and install this one as a dependency:
+
+```bash
+npm install github:Michdo93/cloudflare-openhab-rest-proxy#v0.2.0
+```
+
+```ts
+import { createProxy } from "cloudflare-openhab-rest-proxy";
+import { ALLOWLIST } from "./allowlist";
+
+export default createProxy({
+  allowlist: ALLOWLIST,
+  upstreamUrl: "https://myopenhab.org",
+  accessMode: "public-demo",
+  corsOrigins: ["https://your-name.github.io"]
+});
+```
+
+`createProxy()` also accepts a function `(env) => options` if parts of the configuration come from variables.
+
+## Tested
+
+- Unit tests (`npm test`) for commands, allowlist and event filter, the latter with frames recorded from openHAB 5.2.3.
+- `wrangler dev` against openHAB 5.2.3 behind `tools/fake-myopenhab.mjs`, a stand-in that checks HTTP Basic and holds back the event-stream headers like myopenHAB: lists, groups, states, allowed and rejected commands, foreign origins, rate limit, event filter.
+- Not tested here: the real myopenHAB service and a deployed Worker. Check both with your account before you publish the URL.
+
+In `wrangler dev` a closed browser is noticed with the next heartbeat (at most 15 s), not at once.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT – see [LICENSE](LICENSE).
