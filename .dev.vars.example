@@ -1,0 +1,7 @@
+# Copy to .dev.vars and replace the placeholder. Never commit .dev.vars.
+OPENHAB_TOKEN=replace-with-a-dedicated-openhab-api-token
+
+# Only required when ACCESS_MODE=access. Use your Cloudflare Access team domain
+# without https://, e.g. example.cloudflareaccess.com
+ACCESS_TEAM_DOMAIN=example.cloudflareaccess.com
+ACCESS_AUD=replace-with-your-access-application-audience
