@@ -3,13 +3,11 @@ import { authorize, isAllowedOrigin, parseAllowlist } from "./security";
 import { upstreamFetch } from "./openhab";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
-
 function json(data: unknown, status = 200, extra: HeadersInit = {}): Response {
   const headers = new Headers({ ...JSON_HEADERS, "Cache-Control": "no-store" });
   new Headers(extra).forEach((value, key) => headers.set(key, value));
   return new Response(JSON.stringify(data), { status, headers });
 }
-
 function corsHeaders(request: Request, env: Env): Headers {
   const headers = new Headers({
     "Vary": "Origin",
@@ -24,13 +22,11 @@ function corsHeaders(request: Request, env: Env): Headers {
   }
   return headers;
 }
-
 function withCors(response: Response, request: Request, env: Env): Response {
   const headers = new Headers(response.headers);
   corsHeaders(request, env).forEach((value, key) => headers.set(key, value));
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
-
 function parseItemName(raw: string): string | null {
   try {
     const name = decodeURIComponent(raw);
@@ -43,7 +39,6 @@ function parseItemName(raw: string): string | null {
 function getPermissions(env: Env): Allowlist {
   return parseAllowlist(env.ALLOWED_ITEMS_JSON);
 }
-
 async function proxyJson(response: Response): Promise<Response> {
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 1000);
@@ -55,7 +50,6 @@ async function proxyJson(response: Response): Promise<Response> {
     headers: { ...JSON_HEADERS, "Cache-Control": "no-store" }
   });
 }
-
 async function listItems(env: Env, allowlist: Allowlist): Promise<Response> {
   const permitted = Object.entries(allowlist).filter(([, permission]) => permission.read).map(([name]) => name);
   if (permitted.length === 0) return json([]);
@@ -65,12 +59,10 @@ async function listItems(env: Env, allowlist: Allowlist): Promise<Response> {
   const byName = new Map(items.map((item) => [String(item.name ?? ""), item]));
   return json(permitted.map((name) => byName.get(name)).filter(Boolean));
 }
-
 async function getItem(env: Env, name: string): Promise<Response> {
   const upstream = await upstreamFetch(env, `items/${encodeURIComponent(name)}`);
   return proxyJson(upstream);
 }
-
 async function getItemState(env: Env, name: string): Promise<Response> {
   const upstream = await upstreamFetch(env, `items/${encodeURIComponent(name)}/state`, {
     headers: { "Accept": "text/plain" }
@@ -80,7 +72,6 @@ async function getItemState(env: Env, name: string): Promise<Response> {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
   });
 }
-
 async function sendCommand(request: Request, env: Env, name: string, allowed: string[]): Promise<Response> {
   const contentLength = Number(request.headers.get("Content-Length") ?? "0");
   if (contentLength > 256) return json({ error: "command_too_large" }, 413);
@@ -97,19 +88,16 @@ async function sendCommand(request: Request, env: Env, name: string, allowed: st
   if (!upstream.ok) return proxyJson(upstream);
   return json({ accepted: true, item: name, command }, 202);
 }
-
 function isAllowedEvent(envelope: OpenHABEventEnvelope, allowlist: Allowlist): boolean {
   const topic = typeof envelope.topic === "string" ? envelope.topic : "";
   const match = topic.match(/^openhab\/items\/([A-Za-z0-9_-]+)\/state$/);
   return Boolean(match && allowlist[match[1]]?.read);
 }
-
 async function events(request: Request, env: Env, allowlist: Allowlist): Promise<Response> {
   const names = Object.entries(allowlist).filter(([, permission]) => permission.read).map(([name]) => name);
   if (names.length === 0) return new Response("event: proxy-ready\ndata: {}\n\n", {
     headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" }
   });
-
   const topics = names.map((name) => `openhab/items/${name}/state`).join(",");
   const upstream = await upstreamFetch(env, `events?topics=${encodeURIComponent(topics)}`, {
     headers: { "Accept": "text/event-stream" },
@@ -118,13 +106,11 @@ async function events(request: Request, env: Env, allowlist: Allowlist): Promise
   if (!upstream.ok || !upstream.body) {
     return json({ error: "event_stream_unavailable", status: upstream.status }, upstream.status || 502);
   }
-
   const reader = upstream.body.getReader();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   let buffer = "";
   let closed = false;
-
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
       if (closed) return;
@@ -145,7 +131,6 @@ async function events(request: Request, env: Env, allowlist: Allowlist): Promise
             buffer = buffer.slice(boundaryMatch.index + boundaryMatch[0].length);
             processFrame(frame, controller, encoder, allowlist);
           }
-          // Return control after each upstream chunk so the downstream can apply backpressure.
           return;
         }
       } catch {
@@ -158,7 +143,6 @@ async function events(request: Request, env: Env, allowlist: Allowlist): Promise
       try { await reader.cancel(reason); } catch { /* upstream already closed */ }
     }
   });
-
   request.signal.addEventListener("abort", () => {
     if (!closed) {
       closed = true;
@@ -175,7 +159,6 @@ async function events(request: Request, env: Env, allowlist: Allowlist): Promise
     }
   });
 }
-
 function processFrame(
   frame: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
@@ -198,7 +181,6 @@ function processFrame(
     // Ignore malformed upstream event frames rather than leaking unclassified data.
   }
 }
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = corsHeaders(request, env);
@@ -208,7 +190,6 @@ export default {
       }
       return new Response(null, { status: 204, headers: cors });
     }
-
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") {
       return withCors(json({ status: "ok", service: "cloudflare-openhab-rest-proxy" }), request, env);
@@ -220,14 +201,12 @@ export default {
     if (!await authorize(request, env)) {
       return withCors(json({ error: "unauthorized" }, 401), request, env);
     }
-
     let allowlist: Allowlist;
     try {
       allowlist = getPermissions(env);
     } catch (error) {
       return withCors(json({ error: "proxy_configuration_error", detail: String(error) }, 500), request, env);
     }
-
     try {
       let response: Response;
       if (url.pathname === "/api/v1/items" && request.method === "GET") {

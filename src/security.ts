@@ -10,7 +10,6 @@ export function parseAllowlist(raw: string): Record<string, { read: boolean; com
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("ALLOWED_ITEMS_JSON must be a JSON object");
   }
-
   const result: Record<string, { read: boolean; commands: string[] }> = {};
   for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(name)) {
@@ -46,7 +45,6 @@ export async function authorize(request: Request, env: Env): Promise<boolean> {
 
   const assertion = request.headers.get("Cf-Access-Jwt-Assertion");
   if (!assertion || !env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) return false;
-
   try {
     const [encodedHeader, encodedPayload, encodedSignature] = assertion.split(".");
     if (!encodedHeader || !encodedPayload || !encodedSignature) return false;
@@ -64,7 +62,6 @@ export async function authorize(request: Request, env: Env): Promise<boolean> {
     const now = Math.floor(Date.now() / 1000);
     if (typeof payload.exp !== "number" || payload.exp <= now) return false;
     if (typeof payload.nbf === "number" && payload.nbf > now + 60) return false;
-
     const jwksResponse = await fetch(`https://${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`, {
       headers: { "Accept": "application/json" },
       signal: AbortSignal.timeout(5000)

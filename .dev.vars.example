@@ -1,5 +1,6 @@
-# Copy to .dev.vars and replace the placeholder. Never commit .dev.vars.
-OPENHAB_TOKEN=replace-with-a-dedicated-openhab-api-token
+# Copy to .dev.vars and replace the placeholders. Never commit .dev.vars.
+MYOPENHAB_EMAIL=your-myopenhab-email@example.com
+MYOPENHAB_PASSWORD=replace-with-your-myopenhab-password
 
 # Only required when ACCESS_MODE=access. Use your Cloudflare Access team domain
 # without https://, e.g. example.cloudflareaccess.com

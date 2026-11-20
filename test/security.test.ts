@@ -11,7 +11,6 @@ describe("parseAllowlist", () => {
   it("rejects malformed JSON", () => {
     expect(() => parseAllowlist("{")).toThrow();
   });
-
   it("rejects unsafe item names", () => {
     expect(() => parseAllowlist('{"Bad/Name":{"read":true,"commands":[]}}')).toThrow();
   });

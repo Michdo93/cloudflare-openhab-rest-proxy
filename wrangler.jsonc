@@ -5,7 +5,7 @@
   "compatibility_date": "2026-11-20",
   "workers_dev": true,
   "vars": {
-    "OPENHAB_BASE_URL": "https://myopenhab.org",
+    "MYOPENHAB_BASE_URL": "https://myopenhab.org",
     "OPENHAB_API_PREFIX": "/rest",
     "ACCESS_MODE": "public-demo",
     "CORS_ALLOWED_ORIGINS": "http://localhost:5173",
@@ -14,6 +14,6 @@
     "UPSTREAM_TIMEOUT_MS": "15000"
   },
   "secrets": {
-    "required": ["OPENHAB_TOKEN"]
+    "required": ["MYOPENHAB_EMAIL", "MYOPENHAB_PASSWORD"]
   }
 }
